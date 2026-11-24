@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIX</title>
+</head>
+<body>
+    <main>
+        <div class="brand">
+            <span class="brand-mark">OFICINA DE WEBHOOK</span>
+        </div>
+        <section class="card">
+            <div class="eyebrow">Ambiente de qrcode</div>
+            <h1>Receber por PIX</h1>
+            <p class="intro">Crie uma cobrança e acompanhe</p>
+            <form action="" id="payment-form">
+                <label>Nome do cliente</label>
+                <input type="text" name="cliente" autocomplete="name" placeholder="Ex: Ana Silva" id="cliente"/>
+                <label>Valor em reais</label>
+                <input type="number" name="valor" id="valor" min="0.01" placeholder="50,00" required>
+                <button id="create-button" type="submit">Gerar cobrança</button>
+            </form>
+            <p id="error" class="error" role="alert"></p>
+            <div id="result">
+                <div class="eyeborw">cobrança criada</div>
+                <div id="amount" class="amount"></div> 
+                <div class="qr">
+                    <img alt="QR demostrativo, não pagável" id="qr-image">
+                </div>   
+                <p class="qr-capition">QR Code ilustrativo</p>
+                <div id="status" class="status">aguardando pagamento</div>
+                <p id="payment-id" class="subtle"></p>
+                <button id="simulate-button" type="button">Simular recebimento</button>  
+            </div>
+        </section>
+    </main>
+    <script>
+
+        const form = document.querySelector("#payment-form");
+        const createButton = document.querySelector("#create-button");
+        const simulateButton = document.querySelector("#simulate-button");
+        const result = document.querySelector("#result");
+        const error = document.querySelector("#error");
+        const statusLabel = document.querySelector("#status");
+
+        let = payment = null;
+
+        function showError(message) { error.textContent = message }
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            showError("");
+            createButton.disabled = true;
+            createButton.textContent = "Criando cobrança";
+            try {
+                const response = await fetch('/pagamentos', {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        cliente: form.cliente.value.trim(),
+                        valor: Number(form.valor.value)
+                    })
+                })
+                const data = await response.json();
+                payment = data.pagamento;
+                document.querySelector("#qr-image").src = `https://api.qrserver.com/v1/create-qr-code/?size=168x168&data={encodeURIComponent('DEMO-PIX')}`
+
+                console.log(data)
+            } catch (error) {
+                
+            }
+        })
+
+    </script>
+</body>
+</html>
