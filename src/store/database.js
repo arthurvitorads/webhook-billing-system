@@ -1,24 +1,17 @@
 const mysql = require("mysql2/promise");
 
-let connectionPromise;
-
-function getConnection() {
-    if (!connectionPromise) {
-        connectionPromise = mysql.createConnection({
-            host: process.env.MYSQL_HOST,
-            port: Number(process.env.MYSQL_PORT || 3306),
-            user: process.env.MYSQL_USER,
-            password: process.env.MYSQL_PASSWORD,
-            database: process.env.MYSQL_DATABASE
-        });
-    }
-
-    return connectionPromise;
+function criarPool(
+  database = process.env.DB_NAME || process.env.MYSQL_DATABASE || "billing",
+) {
+  return mysql.createPool({
+    host: process.env.DB_HOST || process.env.MYSQL_HOST || "localhost",
+    port: Number(process.env.DB_PORT || process.env.MYSQL_PORT || 3306),
+    user: process.env.DB_USER || process.env.MYSQL_USER || "root",
+    password: process.env.DB_PASSWORD ?? process.env.MYSQL_PASSWORD,
+    database,
+    timezone: "Z",
+    decimalNumbers: true,
+  });
 }
 
-async function executar(sql, valores) {
-    const connection = await getConnection();
-    return connection.execute(sql, valores);
-}
-
-module.exports = { executar };
+module.exports = { criarPool };

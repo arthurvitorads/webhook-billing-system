@@ -1,51 +1,110 @@
-const crypto = require("node:crypto");
-const { executar } = require("./database");
+const { randomUUID } = require("node:crypto");
 
-const pagamentos = new Map();
-const eventosProcessados = new Set();
+const selecionar = `
+    SELECT p.id, p.cliente, p.valor, p.status, p.criado_em AS criadoEm,
+           (SELECT MAX(e.processado_em) FROM eventos_pagamento e
+            WHERE e.pagamento_id = p.id) AS atualizadoEm
+    FROM pagamentos p`;
 
-async function criarPagamento(cliente, valor){
-    const pagamento = {
-        id: crypto.randomUUID(),
-        cliente,
-        valor,
-        status: "pending",
-        criadoEm: new Date().toISOString()
-    }
+function formatar({ atualizadoEm, ...pagamento }) {
+  if (atualizadoEm) pagamento.atualizadoEm = atualizadoEm;
+  return pagamento;
+}
 
-    await executar(
-        `INSERT INTO pagamentos (id, cliente, valor, status, criado_em)
-         VALUES (?, ?, ?, ?, UTC_TIMESTAMP(3))`,
-        [pagamento.id, pagamento.cliente, pagamento.valor, pagamento.status]
+function criarStore(pool) {
+  async function buscarPagamento(id, executor = pool) {
+    const [linhas] = await executor.execute(selecionar + " WHERE p.id = ?", [
+      id,
+    ]);
+    return linhas.length ? formatar(linhas[0]) : null;
+  }
+
+  async function criarPagamento(cliente, valor) {
+    const id = randomUUID();
+    await pool.execute(
+      `INSERT INTO pagamentos (id, cliente, valor, status, criado_em)
+             VALUES (?, ?, ?, 'pending', UTC_TIMESTAMP(3))`,
+      [id, cliente, valor],
     );
+    return buscarPagamento(id);
+  }
 
-    pagamentos.set(pagamento.id, pagamento);
-    return pagamento;
-}
+  async function listarPagamentos(status) {
+    const filtro = status ? " WHERE p.status = ?" : "";
+    const [linhas] = await pool.execute(
+      selecionar + filtro + " ORDER BY p.criado_em DESC, p.id DESC",
+      status ? [status] : [],
+    );
+    return linhas.map(formatar);
+  }
 
-function buscarPagamento(id){
-    return pagamentos.get(id);
-}
+  async function listarNotificacoes() {
+    const [linhas] = await pool.execute(
+      `SELECT CONVERT(e.id USING utf8mb4) AS eventoId, p.id AS pagamentoId,
+                    p.cliente, p.valor, e.status, e.processado_em AS processadoEm
+             FROM eventos_pagamento e JOIN pagamentos p ON p.id = e.pagamento_id
+             ORDER BY e.processado_em DESC, e.id DESC LIMIT 100`,
+    );
+    return linhas;
+  }
 
-function eventoJaFoiProcessado(id){
-    return eventosProcessados.has(id)
-}
+  async function atualizarPagamento(
+    id,
+    status,
+    eventoId,
+    { apenasPendente = false } = {},
+  ) {
+    const conexao = await pool.getConnection();
+    try {
+      await conexao.beginTransaction();
+      // O bloqueio serializa eventos distintos para a mesma cobrança.
+      const [linhas] = await conexao.execute(
+        "SELECT status FROM pagamentos WHERE id = ? FOR UPDATE",
+        [id],
+      );
+      if (!linhas.length) {
+        await conexao.rollback();
+        return null;
+      }
+      if (apenasPendente && linhas[0].status !== "pending") {
+        await conexao.rollback();
+        return { indisponivel: true };
+      }
 
-function atualizarPagamento(id, status, eventoId){
-    const pagamento = buscarPagamento(id);
-    if(!pagamento){
-        return null
+      try {
+        await conexao.execute(
+          `INSERT INTO eventos_pagamento (id, pagamento_id, status, processado_em)
+                     VALUES (?, ?, ?, UTC_TIMESTAMP(3))`,
+          [eventoId, id, status],
+        );
+      } catch (error) {
+        if (error.code !== "ER_DUP_ENTRY") throw error;
+        await conexao.rollback();
+        return { duplicado: true };
+      }
+
+      await conexao.execute("UPDATE pagamentos SET status = ? WHERE id = ?", [
+        status,
+        id,
+      ]);
+      const pagamento = await buscarPagamento(id, conexao);
+      await conexao.commit();
+      return { pagamento };
+    } catch (error) {
+      await conexao.rollback();
+      throw error;
+    } finally {
+      conexao.release();
     }
-    eventosProcessados.add(eventoId);
-    pagamento.status = status;
-    pagamento.atualizadoEm = new Date().toISOString();
+  }
 
-    return pagamento;
-}
-
-module.exports = {
+  return {
     criarPagamento,
     buscarPagamento,
-    eventoJaFoiProcessado,
-    atualizarPagamento
-}   
+    listarPagamentos,
+    listarNotificacoes,
+    atualizarPagamento,
+  };
+}
+
+module.exports = { criarStore };

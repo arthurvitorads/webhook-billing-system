@@ -1,0 +1,123 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: #eef3f6;
+  color: #122638;
+  font:
+    1rem system-ui,
+    sans-serif;
+}
+main {
+  max-width: 64rem;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+nav {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+nav a {
+  color: #005d54;
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.4rem;
+}
+nav [aria-current] {
+  background: #d7ebe7;
+  font-weight: 700;
+}
+h1 {
+  margin: 0.8rem 0 1.2rem;
+  font-size: clamp(1.8rem, 5vw, 3rem);
+}
+h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+}
+.painel {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 23rem), 1fr));
+  margin-bottom: 1rem;
+}
+section {
+  background: white;
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid #d0dce3;
+}
+form {
+  display: grid;
+  gap: 0.8rem;
+}
+label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+}
+input,
+select,
+button {
+  font: inherit;
+  border-radius: 0.4rem;
+  padding: 0.55rem 0.7rem;
+}
+input,
+select {
+  border: 1px solid #69808f;
+  width: 100%;
+  color: inherit;
+  background: white;
+}
+select {
+  max-width: 14rem;
+}
+button {
+  border: 1px solid #00665d;
+  background: #00665d;
+  color: white;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.secundario {
+  color: #005d54;
+  background: white;
+}
+.cabecalho,
+li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.cabecalho h2 {
+  margin: 0;
+}
+ul {
+  padding: 0;
+  margin-bottom: 0;
+  list-style: none;
+}
+li {
+  border-top: 1px solid #d0dce3;
+  padding: 0.65rem 0;
+  overflow-wrap: anywhere;
+}
+li small {
+  color: #40586b;
+}
+#mensagem {
+  color: #005d54;
+}
+#erro {
+  color: #a32424;
+}
+p:empty {
+  display: none;
+}

@@ -40,7 +40,6 @@ __screenshots__/
 
 # Lock files
 yarn.lock
-package-lock.json
 
 # Env files
 .env

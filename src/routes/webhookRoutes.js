@@ -1,48 +1,60 @@
 const express = require("express");
+const { randomUUID, timingSafeEqual } = require("node:crypto");
+const { pagamentoIdValido, statusValidos } = require("../validation");
 
-const {
-    buscarPagamento,
-    eventoJaFoiProcessado,
-    atualizarPagamento
-} = require("../store/paymentStore");
+function tokenValido(recebido, esperado) {
+  if (!recebido || !esperado) return false;
+  const a = Buffer.from(recebido);
+  const b = Buffer.from(esperado);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
-const router = express.Router();
-const webhookToken = process.env.WEBHOOK_TOKEN || "new-token";
-const statusValidos = ["approved", "reject", "cancelled"];
+module.exports = function webhookRoutes(store, webhookToken) {
+  const router = express.Router();
 
-router.post("/pagamento", (req, res) => {
-    const tokenRecebido = req.get("x-webhook-token");
-    if(tokenRecebido !== webhookToken){
-        return res.status(401).json({erro: "Token do webhook invalido"})
+  async function processar(res, { pagamentoId, status, eventoId }) {
+    if (
+      !pagamentoIdValido(pagamentoId) ||
+      !statusValidos.has(status) ||
+      typeof eventoId !== "string" ||
+      !eventoId ||
+      eventoId !== eventoId.trim() ||
+      Array.from(eventoId).length > 128
+    ) {
+      return res.status(400).json({
+        erro: "Informe um UUID de pagamento, um status válido e um ID de evento de até 128 caracteres sem espaços nas pontas.",
+      });
     }
 
-
-    const { pagamentoId, status, eventoId } = req.body ?? {};
-
-    if (typeof pagamentoId !== "string" || !pagamentoId.trim() ||
-        typeof status !== "string" || !statusValidos.includes(status) ||
-        typeof eventoId !== "string" || !eventoId.trim()) {
-        return res.status(400).json({
-            erro: "informe pagamentoId, um status válido e eventoId."
-        });
+    const resultado = await store.atualizarPagamento(
+      pagamentoId.toLowerCase(),
+      status,
+      eventoId,
+    );
+    if (!resultado)
+      return res.status(404).json({ erro: "Pagamento não encontrado." });
+    if (resultado.duplicado) {
+      return res.json({ mensagem: "Evento já processado", duplicado: true });
     }
-
-    if (eventoJaFoiProcessado(eventoId)) {
-        return res.status(200).json({
-            mensagem: "Evento já processado",
-            duplicado: true
-        });
-    }
-
-    if (!buscarPagamento(pagamentoId)) {
-        return res.status(404).json({ erro: "Pagamento não encontrado" });
-    }
-
-    const pagamento = atualizarPagamento(pagamentoId, status, eventoId);
-    return res.status(200).json({
-        mensagem: "Webhook processado",
-        pagamento
+    res.json({
+      mensagem: "Webhook processado",
+      pagamento: resultado.pagamento,
     });
-})
+  }
 
-module.exports = router;
+  router.post("/pagamento", (req, res) => {
+    if (!tokenValido(req.get("x-webhook-token"), webhookToken)) {
+      return res.status(401).json({ erro: "Token do webhook inválido." });
+    }
+
+    return processar(res, req.body ?? {});
+  });
+
+  // A interface usa o mesmo processamento sem receber o token do webhook.
+  router.post("/simulacao", (req, res) => {
+    const { pagamentoId, status } = req.body ?? {};
+    return processar(res, { pagamentoId, status, eventoId: randomUUID() });
+  });
+
+  return router;
+};
